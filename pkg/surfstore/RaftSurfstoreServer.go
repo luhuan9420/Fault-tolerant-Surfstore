@@ -105,7 +105,7 @@ func (s *RaftSurfstore) CheckMajority(ctx context.Context, empty *emptypb.Empty)
 		}
 		log.Printf("alive servers: %v\n", alive)
 		log.Println(len(s.ipList) / 2)
-		if alive > len(s.ipList)/2 {
+		if alive >= len(s.ipList)/2 {
 			return true
 		}
 	}
@@ -213,6 +213,7 @@ func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *
 				if strings.Contains(err.Error(), ERR_PREVLOGTERM_MISMATCH.Error()) {
 					input.Entries = append([]*UpdateOperation{s.log[input.PrevLogIndex]}, input.Entries...)
 					input.PrevLogIndex -= 1
+					s.nextIndex[serverIdx] -= 1
 					if input.PrevLogIndex >= 0 {
 						input.PrevLogTerm = s.log[input.PrevLogIndex].Term
 					} else {
@@ -279,25 +280,26 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	//3. If an existing entry conflicts with a new one (same index but different
 	//terms), delete the existing entry and all that follow it (§5.3)
 
-	// if int(input.LeaderCommit) > len(s.log) {
+	// if int(input.LeaderCommit)+1 > len(s.log) {
 	// 	return output, ERR_LOG_INCONSISTENT
 	// }
-	// if input.Entries[input.LeaderCommit-1] != s.log[input.LeaderCommit-1] {
+	// if input.Entries[input.LeaderCommit] != s.log[input.LeaderCommit] {
 	// 	return output, ERR_LOG_INCONSISTENT
 	// }
+	s.log = s.log[:input.PrevLogIndex+1]
 
 	//4. Append any new entries not already in the log
-	s.log = append(s.log[:input.PrevLogIndex+1], input.Entries...)
-	// fmt.Printf("Commit index: %v\n", s.commitIndex)
-	// fmt.Printf("Leader commit: %v\n", input.LeaderCommit)
+	s.log = append(s.log, input.Entries...)
+	fmt.Printf("Commit index: %v\n", s.commitIndex)
+	fmt.Printf("Leader commit: %v\n", input.LeaderCommit)
 
 	//5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
 	//of last new entry)
 	if input.LeaderCommit > s.commitIndex {
 		s.commitIndex = int64(math.Min(float64(input.LeaderCommit), float64(len(s.log)-1)))
 	}
-	// fmt.Printf("Last Applied: %v\n", s.lastApplied)
-	// fmt.Printf("Commit index: %v\n", s.commitIndex)
+	fmt.Printf("Last Applied: %v\n", s.lastApplied)
+	fmt.Printf("Commit index: %v\n", s.commitIndex)
 	for s.lastApplied < s.commitIndex {
 		s.lastApplied++
 		entry := s.log[s.lastApplied]
@@ -389,6 +391,7 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 				if strings.Contains(err.Error(), ERR_PREVLOGTERM_MISMATCH.Error()) {
 					input.Entries = append([]*UpdateOperation{s.log[input.PrevLogIndex]}, input.Entries...)
 					input.PrevLogIndex -= 1
+					s.nextIndex[i] -= 1
 					if input.PrevLogIndex >= 0 {
 						input.PrevLogTerm = s.log[input.PrevLogIndex].Term
 					} else {
