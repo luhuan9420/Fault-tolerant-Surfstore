@@ -122,6 +122,10 @@ func ClientSync(client RPCClient) {
 	log.Printf("size of local file info map: %v\n", len(localFileInfoMap))
 	// remaining key in fileDelete is the file that is deleted by client
 	for filename, _ := range fileDelete {
+		if localFileInfoMap[filename].BlockHashList[0] == "0" {
+			// log.Println("File already delete")
+			break
+		}
 		// deleted file
 		fmd := &FileMetaData{
 			Filename:      filename,
@@ -159,15 +163,15 @@ func ClientSync(client RPCClient) {
 	*/
 	for fileName, fmd := range localFileInfoMap {
 		if serverMD, ok := serverFileInfoMap[fileName]; ok {
-			log.Printf("local version: %v", fmd.GetVersion())
-			log.Printf("server version: %v", serverMD.GetVersion())
+			log.Printf("local version: %v\n", fmd.GetVersion())
+			log.Printf("server version: %v\n", serverMD.GetVersion())
 			modified := fileModified[fileName]
-			fmt.Printf("Modified file? %v", modified)
+			fmt.Printf("Modified file? %v\n", modified)
 			// if dataA and dataB both have one file with different content, they have the same version, but the modified is false
 			// what to do to pass this test case? update sesrver
 			// check if local file hash list is different than server file
 			new := fileNew[fileName]
-			fmt.Printf("New file? %v", new)
+			fmt.Printf("New file? %v\n", new)
 
 			if fmd.GetVersion() == serverMD.GetVersion() && !modified && !new {
 				continue
@@ -184,9 +188,9 @@ func ClientSync(client RPCClient) {
 			uploadNew(client, fmd, &localFileInfoMap)
 		}
 	}
-	server2 := make(map[string]*FileMetaData)
-	err = client.GetFileInfoMap(&server2)
-	log.Printf("size of server file info map: %v\n", len(server2))
+	// server2 := make(map[string]*FileMetaData)
+	// err = client.GetFileInfoMap(&server2)
+	// log.Printf("size of server file info map: %v\n", len(server2))
 	// for fileName, fmd := range fileNew {
 	// 	if serverMD, ok := serverFileInfoMap[fileName]; ok {
 	// 		clientSideUpdate(client, fmd, false, )
@@ -333,7 +337,7 @@ func uploadNew(client RPCClient, fmd *FileMetaData, localFileInfoMap *map[string
 		}
 		cleintSideUpdate(client, serverFileInfoMap[fmd.GetFilename()], localFileInfoMap)
 	}
-	log.Println("Finish uploading...")
+	fmt.Println("Finish uploading...")
 	return err
 }
 
@@ -399,16 +403,4 @@ func download(client RPCClient, filename string, serverMD *FileMetaData) (*FileM
 	}
 	log.Println("Finish downloading...")
 	return fmd, err
-}
-
-func hashListNotEqual(server, local []string) bool {
-	if len(server) != len(local) {
-		return true
-	}
-	for i, v := range server {
-		if v != local[i] {
-			return true
-		}
-	}
-	return false
 }

@@ -65,6 +65,9 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 			break
 		}
 	}
+	// if s.CheckMajority(ctx, empty) == false {
+	// 	return nil, ERR_MAJORITY_CRASHED
+	// }
 	log.Printf("file info map: %v", s.metaStore.FileMetaMap)
 	return &FileInfoMap{FileInfoMap: s.metaStore.FileMetaMap}, nil
 }
@@ -173,6 +176,8 @@ func (s *RaftSurfstore) attemptCommit() {
 
 func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *AppendEntryOutput) {
 	log.Printf("Server %v call commit entry...\n", serverIdx)
+	fmt.Printf("Server %v call commit entry...\n log: %v\n", serverIdx, s.log[entryIdx])
+	trial := 1
 	for {
 		addr := s.ipList[serverIdx]
 		conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -200,35 +205,35 @@ func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		trial := 1
-		for {
-			log.Printf("Server %v calls AppendEntries: trial %v", serverIdx, trial)
-			trial++
-			output, err := client.AppendEntries(ctx, input)
-			if err != nil {
-				if strings.Contains(err.Error(), ERR_WRONG_TERM.Error()) {
-					s.isLeader = false
-					return
-				}
-				if strings.Contains(err.Error(), ERR_PREVLOGTERM_MISMATCH.Error()) {
-					input.Entries = append([]*UpdateOperation{s.log[input.PrevLogIndex]}, input.Entries...)
-					input.PrevLogIndex -= 1
-					s.nextIndex[serverIdx] -= 1
-					if input.PrevLogIndex >= 0 {
-						input.PrevLogTerm = s.log[input.PrevLogIndex].Term
-					} else {
-						input.PrevLogTerm = -1
-					}
-				}
-			}
-			if output.Success {
-				log.Printf("Server %v Append entry success\n", serverIdx)
-				commitChan <- output
+		// trial := 1
+		// for {
+		log.Printf("Server %v calls AppendEntries: trial %v", serverIdx, trial)
+		trial++
+		output, err := client.AppendEntries(ctx, input)
+		if err != nil {
+			if strings.Contains(err.Error(), ERR_WRONG_TERM.Error()) {
+				s.isLeader = false
 				return
-			} else if s.isCrashed {
-				continue
+			}
+			if strings.Contains(err.Error(), ERR_PREVLOGTERM_MISMATCH.Error()) {
+				input.Entries = append([]*UpdateOperation{s.log[input.PrevLogIndex]}, input.Entries...)
+				input.PrevLogIndex -= 1
+				s.nextIndex[serverIdx] -= 1
+				if input.PrevLogIndex >= 0 {
+					input.PrevLogTerm = s.log[input.PrevLogIndex].Term
+				} else {
+					input.PrevLogTerm = -1
+				}
 			}
 		}
+		if output.Success {
+			log.Printf("Server %v Append entry success\n", serverIdx)
+			commitChan <- output
+			return
+		} else if s.isCrashed {
+			continue
+		}
+		// }
 
 	}
 }
@@ -313,6 +318,8 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	output.Term = input.Term
 	output.ServerId = s.serverId
 	output.MatchedIndex = s.matchIndex[s.serverId]
+
+	fmt.Printf("Server %v append entries\nlog: %v\n", s.serverId, s.log)
 	fmt.Printf("Server %v output: %v\n", s.serverId, output)
 	return output, nil
 }
@@ -436,7 +443,6 @@ func (s *RaftSurfstore) IsCrashed(ctx context.Context, _ *emptypb.Empty) (*Crash
 }
 
 func (s *RaftSurfstore) GetInternalState(ctx context.Context, empty *emptypb.Empty) (*RaftInternalState, error) {
-	fmt.Printf("log: %v\n", s.log)
 	fileInfoMap, _ := s.metaStore.GetFileInfoMap(ctx, empty)
 	return &RaftInternalState{
 		IsLeader: s.isLeader,
