@@ -3,12 +3,13 @@ package SurfTest
 import (
 	context "context"
 	"cse224/proj5/pkg/surfstore"
-	"google.golang.org/grpc"
 	"log"
 	"os"
 	"os/exec"
 	"strconv"
 	"time"
+
+	"google.golang.org/grpc"
 )
 
 type TestInfo struct {
@@ -71,7 +72,7 @@ func EndTest(test TestInfo) {
 }
 
 func InitBlockStore(blockStorePort string) *exec.Cmd {
-	blockCmd := exec.Command("_bin/SurfstoreServerExec", "-s", "block", "-p", blockStorePort, "-l")
+	blockCmd := exec.Command("_bin/SurfstoreServerExec", "-s", "block", "-p", blockStorePort, "-l", "-d")
 	blockCmd.Stderr = os.Stderr
 	blockCmd.Stdout = os.Stdout
 	err := blockCmd.Start()
@@ -86,7 +87,7 @@ func InitRaftServers(cfgPath string) []*exec.Cmd {
 	cfg := surfstore.LoadRaftConfigFile(cfgPath)
 	cmdList := make([]*exec.Cmd, 0)
 	for idx, _ := range cfg {
-		cmd := exec.Command("_bin/SurfstoreRaftServerExec", "-f", cfgPath, "-i", strconv.Itoa(idx), "-b", "localhost:8080")
+		cmd := exec.Command("_bin/SurfstoreRaftServerExec", "-f", cfgPath, "-i", strconv.Itoa(idx), "-b", "localhost:8080", "-d")
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
 		cmdList = append(cmdList, cmd)
