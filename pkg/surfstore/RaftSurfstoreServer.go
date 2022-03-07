@@ -47,6 +47,10 @@ type RaftSurfstore struct {
 	UnimplementedRaftSurfstoreServer
 }
 
+// type Crash struct {
+// 	NotCrash *bool
+// }
+
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
 	log.Println("Get file info map...")
 
@@ -60,16 +64,36 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 
 	// check majority
 	// if majroity of nodes are crashed, block until majrotiy recover
-	for {
-		if s.CheckMajority(ctx, empty) {
-			break
-		}
-	}
-	// if s.CheckMajority(ctx, empty) == false {
-	// 	return nil, ERR_MAJORITY_CRASHED
+	// for {
+	// 	if s.CheckMajority(ctx, empty) {
+	// 		break
+	// 	}
 	// }
-	log.Printf("file info map: %v", s.metaStore.FileMetaMap)
+	if s.CheckMajority(ctx, empty) == false {
+		return nil, ERR_MAJORITY_CRASHED
+	}
 	return &FileInfoMap{FileInfoMap: s.metaStore.FileMetaMap}, nil
+
+	// commitChan := make(chan *bool, len(s.ipList))
+	// for i, _ := range s.ipList {
+	// 	if i == int(s.serverId) {
+	// 		continue
+	// 	}
+	// 	go s.CheckAlive(int64(i), commitChan)
+	// }
+
+	// aliveCount := 1
+	// for {
+	// 	commit := <-commitChan
+	// 	if commit != nil && (*commit) == true {
+	// 		aliveCount++
+	// 	}
+	// 	if aliveCount > len(s.ipList)/2 {
+	// 		return &FileInfoMap{FileInfoMap: s.metaStore.FileMetaMap}, nil
+	// 	}
+	// }
+
+	// return nil, ERR_MAJORITY_CRASHED
 }
 
 func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Empty) (*BlockStoreAddr, error) {
@@ -82,18 +106,42 @@ func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Em
 		return nil, ERR_NOT_LEADER
 	}
 
-	for {
-		if s.CheckMajority(ctx, empty) {
-			break
-		}
+	// for {
+	// 	if s.CheckMajority(ctx, empty) {
+	// 		break
+	// 	}
+	// }
+	if s.CheckMajority(ctx, empty) == false {
+		return nil, ERR_MAJORITY_CRASHED
 	}
 	return &BlockStoreAddr{Addr: s.metaStore.BlockStoreAddr}, nil
+
+	// commitChan := make(chan *bool, len(s.ipList))
+	// for i, _ := range s.ipList {
+	// 	if i == int(s.serverId) {
+	// 		continue
+	// 	}
+	// 	go s.CheckAlive(int64(i), commitChan)
+	// }
+
+	// aliveCount := 1
+	// for {
+	// 	commit := <-commitChan
+	// 	if commit != nil && (*commit) == true {
+	// 		aliveCount++
+	// 	}
+	// 	if aliveCount > len(s.ipList)/2 {
+	// 		return &BlockStoreAddr{Addr: s.metaStore.BlockStoreAddr}, nil
+	// 	}
+	// }
+	// return nil, ERR_MAJORITY_CRASHED
 }
 
 func (s *RaftSurfstore) CheckMajority(ctx context.Context, empty *emptypb.Empty) bool {
 	alive := 0
 	for i, addr := range s.ipList {
 		if i == int(s.serverId) {
+			alive++
 			continue
 		}
 		conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -106,13 +154,33 @@ func (s *RaftSurfstore) CheckMajority(ctx context.Context, empty *emptypb.Empty)
 		if clientCrashed.IsCrashed == false {
 			alive++
 		}
-		log.Printf("alive servers: %v\n", alive)
-		log.Println(len(s.ipList) / 2)
-		if alive >= len(s.ipList)/2 {
+		if alive > len(s.ipList)/2 {
 			return true
 		}
 	}
 	return false
+}
+
+func (s *RaftSurfstore) CheckAlive(serverIdx int64, commitChan chan *bool) {
+	for {
+		conn, err := grpc.Dial(s.ipList[serverIdx])
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		client := NewRaftSurfstoreClient(conn)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		clientCrashed, _ := client.IsCrashed(ctx, &emptypb.Empty{})
+		if clientCrashed.IsCrashed == false {
+			b := true
+			notCrash := Crash{&b}
+			commitChan <- notCrash.NotCrash
+			return
+		} else {
+			continue
+		}
+	}
 }
 
 func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) (*Version, error) {
@@ -184,6 +252,7 @@ func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *
 		if err != nil {
 			return
 		}
+		defer conn.Close()
 		client := NewRaftSurfstoreClient(conn)
 		log.Printf("Server %v connects successfully", serverIdx)
 		prevLogIndex := s.nextIndex[serverIdx] - 1
@@ -330,7 +399,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 	if s.isCrashed {
 		return nil, ERR_SERVER_CRASHED
 	}
-	log.Printf("Server %v sets to be a leader...\n", s.serverId)
+	fmt.Printf("Server %v sets to be a leader...\n", s.serverId)
 	// need lock ?
 	s.isLeader = true
 	s.term = s.term + 1
@@ -347,7 +416,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 // Send a 'Heartbeat" (AppendEntries with no log entries) to the other servers
 // Only leaders send heartbeats, if the node is not the leader you can return Success = false
 func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
-	log.Printf("Server %v start sends heartbeat...\n", s.serverId)
+	fmt.Printf("Server %v start sends heartbeat...\n", s.serverId)
 	if s.isCrashed {
 		return &Success{Flag: false}, ERR_SERVER_CRASHED
 	}
