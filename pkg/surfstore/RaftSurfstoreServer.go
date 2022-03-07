@@ -290,16 +290,16 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	//4. Append any new entries not already in the log
 	s.log = append(s.log, input.Entries...)
-	fmt.Printf("Commit index: %v\n", s.commitIndex)
-	fmt.Printf("Leader commit: %v\n", input.LeaderCommit)
+	log.Printf("Commit index: %v\n", s.commitIndex)
+	log.Printf("Leader commit: %v\n", input.LeaderCommit)
 
 	//5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
 	//of last new entry)
 	if input.LeaderCommit > s.commitIndex {
 		s.commitIndex = int64(math.Min(float64(input.LeaderCommit), float64(len(s.log)-1)))
 	}
-	fmt.Printf("Last Applied: %v\n", s.lastApplied)
-	fmt.Printf("Commit index: %v\n", s.commitIndex)
+	log.Printf("Last Applied: %v\n", s.lastApplied)
+	log.Printf("Commit index: %v\n", s.commitIndex)
 	for s.lastApplied < s.commitIndex {
 		s.lastApplied++
 		entry := s.log[s.lastApplied]
@@ -436,6 +436,7 @@ func (s *RaftSurfstore) IsCrashed(ctx context.Context, _ *emptypb.Empty) (*Crash
 }
 
 func (s *RaftSurfstore) GetInternalState(ctx context.Context, empty *emptypb.Empty) (*RaftInternalState, error) {
+	fmt.Printf("log: %v\n", s.log)
 	fileInfoMap, _ := s.metaStore.GetFileInfoMap(ctx, empty)
 	return &RaftInternalState{
 		IsLeader: s.isLeader,

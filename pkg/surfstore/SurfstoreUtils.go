@@ -46,7 +46,6 @@ func ClientSync(client RPCClient) {
 	// fileModified := make(map[string]string)
 	fileModified := make(map[string]bool)
 	fileNew := make(map[string]bool)
-	// fileNew := make(map[string]string)
 	for _, f := range localFiles {
 		log.Printf("file name: %v\n", f.Name())
 		if f.Name() == "index.txt" {
@@ -143,7 +142,7 @@ func ClientSync(client RPCClient) {
 		log.Fatalf("Error when trying to get file info from server: %v\n", err)
 	}
 	log.Printf("size of server file info map: %v\n", len(serverFileInfoMap))
-	fmt.Print("server file info map")
+	fmt.Println("server file info map")
 	PrintMetaMap(serverFileInfoMap)
 
 	/* compare local index to remote index
@@ -163,12 +162,12 @@ func ClientSync(client RPCClient) {
 			log.Printf("local version: %v", fmd.GetVersion())
 			log.Printf("server version: %v", serverMD.GetVersion())
 			modified := fileModified[fileName]
-			log.Printf("Modified file? %v", modified)
+			fmt.Printf("Modified file? %v", modified)
 			// if dataA and dataB both have one file with different content, they have the same version, but the modified is false
 			// what to do to pass this test case? update sesrver
 			// check if local file hash list is different than server file
 			new := fileNew[fileName]
-			log.Printf("New file? %v", new)
+			fmt.Printf("New file? %v", new)
 
 			if fmd.GetVersion() == serverMD.GetVersion() && !modified && !new {
 				continue
@@ -230,7 +229,7 @@ func GetHashString(hashList []string) string {
 }
 
 func serverSideUpdate(client RPCClient, clientMD *FileMetaData, modified bool, localFileInfoMap *map[string]*FileMetaData) {
-	log.Printf("Update server...")
+	fmt.Printf("Update server...")
 	// if client file has been updated, version needs to be udpated
 	if modified {
 		clientMD.Version += 1
@@ -244,7 +243,7 @@ func serverSideUpdate(client RPCClient, clientMD *FileMetaData, modified bool, l
 }
 
 func cleintSideUpdate(client RPCClient, serverMD *FileMetaData, localFileInfoMap *map[string]*FileMetaData) {
-	log.Printf("Update client...")
+	fmt.Printf("Update client...")
 	downloadMD, err := download(client, serverMD.GetFilename(), serverMD)
 
 	if err != nil {
@@ -255,7 +254,7 @@ func cleintSideUpdate(client RPCClient, serverMD *FileMetaData, localFileInfoMap
 }
 
 func uploadNew(client RPCClient, fmd *FileMetaData, localFileInfoMap *map[string]*FileMetaData) error {
-	log.Println("Start uploading...")
+	fmt.Println("Start uploading...")
 	// log.Printf("File name: %v\n", fmd.GetFilename())
 	filePath := client.BaseDir + "/" + fmd.GetFilename()
 	// log.Printf("File path: %v\n", filePath)
