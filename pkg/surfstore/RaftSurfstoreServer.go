@@ -49,6 +49,11 @@ type RaftSurfstore struct {
 
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
 	log.Println("Get file info map...")
+
+	if s.isCrashed {
+		return nil, ERR_SERVER_CRASHED
+	}
+
 	if s.isLeader == false {
 		return nil, ERR_NOT_LEADER
 	}
@@ -65,6 +70,11 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 }
 
 func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Empty) (*BlockStoreAddr, error) {
+
+	if s.isCrashed {
+		return nil, ERR_SERVER_CRASHED
+	}
+
 	if s.isLeader == false {
 		return nil, ERR_NOT_LEADER
 	}
@@ -93,6 +103,8 @@ func (s *RaftSurfstore) CheckMajority(ctx context.Context, empty *emptypb.Empty)
 		if clientCrashed.IsCrashed == false {
 			alive++
 		}
+		log.Printf("alive servers: %v\n", alive)
+		log.Println(len(s.ipList) / 2)
 		if alive > len(s.ipList)/2 {
 			return true
 		}
@@ -105,7 +117,11 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	// if leader & majority nodes working, return correct answer (call updateFile function)
 	// if majority node crashed, block until majority recover
 	// if not leader, return error back to client
-	log.Printf("Raft update file...\n")
+	log.Printf("Server %v call raft update file...\n", s.serverId)
+	if s.isCrashed {
+		return nil, ERR_SERVER_CRASHED
+	}
+
 	if s.isLeader == false {
 		return nil, ERR_NOT_LEADER
 	}
@@ -131,7 +147,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 }
 
 func (s *RaftSurfstore) attemptCommit() {
-	log.Printf("Attempt commit...\n")
+	log.Printf("Server %v call attempt commit...\n", s.serverId)
 	targetIdx := s.commitIndex + 1
 	commitChan := make(chan *AppendEntryOutput, len(s.ipList))
 	for i, _ := range s.ipList {
@@ -156,7 +172,7 @@ func (s *RaftSurfstore) attemptCommit() {
 }
 
 func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *AppendEntryOutput) {
-	log.Printf("Commit entry...")
+	log.Printf("Server %v call commit entry...\n", serverIdx)
 	for {
 		addr := s.ipList[serverIdx]
 		conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -323,12 +339,12 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 // Only leaders send heartbeats, if the node is not the leader you can return Success = false
 func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	log.Printf("Server %v start sends heartbeat...\n", s.serverId)
-	if s.isLeader == false {
-		return &Success{Flag: false}, ERR_NOT_LEADER
-	}
-
 	if s.isCrashed {
 		return &Success{Flag: false}, ERR_SERVER_CRASHED
+	}
+
+	if s.isLeader == false {
+		return &Success{Flag: false}, ERR_NOT_LEADER
 	}
 
 	for i, addr := range s.ipList {

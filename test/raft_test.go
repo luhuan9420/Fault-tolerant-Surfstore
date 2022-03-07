@@ -3,6 +3,7 @@ package SurfTest
 import (
 	context "context"
 	"cse224/proj5/pkg/surfstore"
+	"log"
 	"testing"
 
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -101,9 +102,10 @@ func TestRaftFollowersGetUpdates(t *testing.T) {
 		Term:         1,
 		FileMetaData: filemeta1,
 	})
-
+	log.Printf("golden log: %v\n", goldenLog)
 	for _, server := range test.Clients {
 		state, _ := server.GetInternalState(test.Context, &emptypb.Empty{})
+		log.Printf("Server log: %v\n", state.Log)
 		if !SameLog(goldenLog, state.Log) {
 			t.Log("Logs do not match")
 			t.Fail()

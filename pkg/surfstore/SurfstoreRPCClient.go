@@ -84,6 +84,8 @@ func (surfClient *RPCClient) HasBlocks(blockHashesIn []string, blockStoreAddr st
 
 func (surfClient *RPCClient) GetLeaderIndex() int {
 	// log.Printf("MetaStoreAddrs: %v\n", surfClient.MetaStoreAddrs)
+	leaderIdx := -1
+	highestTerm := -1
 	for i, addr := range surfClient.MetaStoreAddrs {
 		conn, err := grpc.Dial(addr, grpc.WithInsecure())
 		if err != nil {
@@ -97,16 +99,19 @@ func (surfClient *RPCClient) GetLeaderIndex() int {
 		if err != nil {
 			continue
 		}
-		if internalState.IsLeader {
-			return i
+		if internalState.IsLeader && int(internalState.Term) > highestTerm {
+			leaderIdx = i
+			highestTerm = int(internalState.Term)
 		}
 	}
-	return -1
+	log.Printf("Leader index: %v\n", leaderIdx)
+	log.Printf("Leader term: %v\n", highestTerm)
+	return leaderIdx
 }
 
 func (surfClient *RPCClient) GetFileInfoMap(serverFileInfoMap *map[string]*FileMetaData) error {
 	leaderIdx := surfClient.GetLeaderIndex()
-
+	log.Printf("leaderIdx: %v call get file info map\n", leaderIdx)
 	conn, err := grpc.Dial(surfClient.MetaStoreAddrs[leaderIdx], grpc.WithInsecure())
 	if err != nil {
 		return err
@@ -115,6 +120,9 @@ func (surfClient *RPCClient) GetFileInfoMap(serverFileInfoMap *map[string]*FileM
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+
+	// crash, _ := ms.IsCrashed(ctx, &emptypb.Empty{})
+	// log.Printf("Is leader crash? %v\n", crash.IsCrashed)
 	fileInfoMap, err := ms.GetFileInfoMap(ctx, &emptypb.Empty{})
 	if err != nil {
 		conn.Close()
@@ -133,7 +141,7 @@ func (surfClient *RPCClient) GetFileInfoMap(serverFileInfoMap *map[string]*FileM
 func (surfClient *RPCClient) UpdateFile(fileMetaData *FileMetaData, latestVersion *int32) error {
 	// log.Printf("client update file...\n")
 	leaderIdx := surfClient.GetLeaderIndex()
-	log.Printf("leaderIdx: %v\n", leaderIdx)
+	log.Printf("leaderIdx: %v call update file\n", leaderIdx)
 
 	conn, err := grpc.Dial(surfClient.MetaStoreAddrs[leaderIdx], grpc.WithInsecure())
 	if err != nil {
