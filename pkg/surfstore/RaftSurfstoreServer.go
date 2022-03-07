@@ -389,7 +389,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	output.MatchedIndex = s.matchIndex[s.serverId]
 
 	fmt.Printf("Server %v append entries\nlog: %v\n", s.serverId, s.log)
-	fmt.Printf("Server %v output: %v\n", s.serverId, output)
+	// fmt.Printf("Server %v output: %v\n", s.serverId, output)
 	return output, nil
 }
 
@@ -416,7 +416,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 // Send a 'Heartbeat" (AppendEntries with no log entries) to the other servers
 // Only leaders send heartbeats, if the node is not the leader you can return Success = false
 func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
-	fmt.Printf("Server %v start sends heartbeat...\n", s.serverId)
+	// fmt.Printf("Server %v start sends heartbeat...\n", s.serverId)
 	if s.isCrashed {
 		return &Success{Flag: false}, ERR_SERVER_CRASHED
 	}

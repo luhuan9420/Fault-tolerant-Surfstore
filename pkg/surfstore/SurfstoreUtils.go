@@ -166,12 +166,12 @@ func ClientSync(client RPCClient) {
 			log.Printf("local version: %v\n", fmd.GetVersion())
 			log.Printf("server version: %v\n", serverMD.GetVersion())
 			modified := fileModified[fileName]
-			fmt.Printf("Modified file? %v\n", modified)
+			// fmt.Printf("Modified file? %v\n", modified)
 			// if dataA and dataB both have one file with different content, they have the same version, but the modified is false
 			// what to do to pass this test case? update sesrver
 			// check if local file hash list is different than server file
 			new := fileNew[fileName]
-			fmt.Printf("New file? %v\n", new)
+			// fmt.Printf("New file? %v\n", new)
 
 			if fmd.GetVersion() == serverMD.GetVersion() && !modified && !new {
 				continue
@@ -266,8 +266,8 @@ func uploadNew(client RPCClient, fmd *FileMetaData, localFileInfoMap *map[string
 	if _, e := os.Stat(filePath); os.IsNotExist(e) {
 		var version int32
 		err := client.UpdateFile(fmd, &version)
-		fmt.Printf("Version: %v\n", version)
-		fmt.Printf("FMD version: %v\n", fmd.GetVersion())
+		// fmt.Printf("Version: %v\n", version)
+		// fmt.Printf("FMD version: %v\n", fmd.GetVersion())
 		if err != nil {
 			log.Printf("Failed to update file: %v\n", err)
 			// log.Fatalf("Failed to update file: %v\n", err)
@@ -317,8 +317,8 @@ func uploadNew(client RPCClient, fmd *FileMetaData, localFileInfoMap *map[string
 
 	var version int32
 	err = client.UpdateFile(fmd, &version)
-	fmt.Printf("Version: %v\n", version)
-	fmt.Printf("FMD version: %v\n", fmd.GetVersion())
+	// fmt.Printf("Version: %v\n", version)
+	// fmt.Printf("FMD version: %v\n", fmd.GetVersion())
 
 	if err != nil {
 		log.Printf("Failed to update file: %v\n", err)
