@@ -161,27 +161,27 @@ func (s *RaftSurfstore) CheckMajority(ctx context.Context, empty *emptypb.Empty)
 	return false
 }
 
-func (s *RaftSurfstore) CheckAlive(serverIdx int64, commitChan chan *bool) {
-	for {
-		conn, err := grpc.Dial(s.ipList[serverIdx])
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		client := NewRaftSurfstoreClient(conn)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		clientCrashed, _ := client.IsCrashed(ctx, &emptypb.Empty{})
-		if clientCrashed.IsCrashed == false {
-			b := true
-			notCrash := Crash{&b}
-			commitChan <- notCrash.NotCrash
-			return
-		} else {
-			continue
-		}
-	}
-}
+// func (s *RaftSurfstore) CheckAlive(serverIdx int64, commitChan chan *bool) {
+// 	for {
+// 		conn, err := grpc.Dial(s.ipList[serverIdx])
+// 		if err != nil {
+// 			return
+// 		}
+// 		defer conn.Close()
+// 		client := NewRaftSurfstoreClient(conn)
+// 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// 		defer cancel()
+// 		clientCrashed, _ := client.IsCrashed(ctx, &emptypb.Empty{})
+// 		if clientCrashed.IsCrashed == false {
+// 			b := true
+// 			notCrash := Crash{&b}
+// 			commitChan <- notCrash.NotCrash
+// 			return
+// 		} else {
+// 			continue
+// 		}
+// 	}
+// }
 
 func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) (*Version, error) {
 	// update fileMetaData
