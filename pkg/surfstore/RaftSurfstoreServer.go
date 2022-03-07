@@ -2,6 +2,7 @@ package surfstore
 
 import (
 	context "context"
+	"fmt"
 	"log"
 	"math"
 	"strings"
@@ -47,6 +48,7 @@ type RaftSurfstore struct {
 }
 
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
+	log.Println("Get file info map...")
 	if s.isLeader == false {
 		return nil, ERR_NOT_LEADER
 	}
@@ -58,6 +60,7 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 			break
 		}
 	}
+	log.Printf("file info map: %v", s.metaStore.FileMetaMap)
 	return &FileInfoMap{FileInfoMap: s.metaStore.FileMetaMap}, nil
 }
 
@@ -174,7 +177,7 @@ func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *
 			PrevLogIndex: prevLogIndex,
 			PrevLogTerm:  int64(prevLogTerm),
 			Entries:      []*UpdateOperation{s.log[entryIdx]},
-			LeaderCommit: s.commitIndex,
+			LeaderCommit: s.commitIndex + 1,
 		}
 
 		log.Printf("Append Entry Input: %v\n", input)
@@ -269,11 +272,16 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	//4. Append any new entries not already in the log
 	s.log = append(s.log[:input.PrevLogIndex+1], input.Entries...)
+	// fmt.Printf("Commit index: %v\n", s.commitIndex)
+	// fmt.Printf("Leader commit: %v\n", input.LeaderCommit)
 
 	//5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
 	//of last new entry)
-	s.commitIndex = int64(math.Min(float64(input.LeaderCommit), float64(len(s.log)-1)))
-
+	if input.LeaderCommit > s.commitIndex {
+		s.commitIndex = int64(math.Min(float64(input.LeaderCommit), float64(len(s.log)-1)))
+	}
+	// fmt.Printf("Last Applied: %v\n", s.lastApplied)
+	// fmt.Printf("Commit index: %v\n", s.commitIndex)
 	for s.lastApplied < s.commitIndex {
 		s.lastApplied++
 		entry := s.log[s.lastApplied]
@@ -287,7 +295,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	output.Term = input.Term
 	output.ServerId = s.serverId
 	output.MatchedIndex = s.matchIndex[s.serverId]
-
+	fmt.Printf("Server %v output: %v\n", s.serverId, output)
 	return output, nil
 }
 
@@ -302,7 +310,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 	s.isLeader = true
 	s.term = s.term + 1
 	// update next match
-	log.Printf("Number of servers: %v \n", len(s.ipList))
+	// log.Printf("Number of servers: %v \n", len(s.ipList))
 	for i, _ := range s.ipList {
 		s.nextIndex[i] = int64(len(s.log))
 	}
@@ -332,15 +340,15 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 			return nil, err
 		}
 		client := NewRaftSurfstoreClient(conn)
-		log.Printf("Server %v connects successfully", i)
+		// log.Printf("Server %v connects successfully", i)
 
 		prevLogIndex := s.nextIndex[i] - 1
-		log.Printf("Prev log index: %v\n", prevLogIndex)
+		// log.Printf("Prev log index: %v\n", prevLogIndex)
 		prevLogTerm := -1
 		if prevLogIndex >= 0 {
 			prevLogTerm = int(s.log[prevLogIndex].Term)
 		}
-		log.Printf("Prev log term: %v\n", prevLogTerm)
+		// log.Printf("Prev log term: %v\n", prevLogTerm)
 
 		input := &AppendEntryInput{
 			Term:         s.term,
@@ -349,7 +357,7 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 			Entries:      make([]*UpdateOperation, 0),
 			LeaderCommit: s.commitIndex,
 		}
-		log.Printf("Append Entry Input: %v\n", input)
+		// log.Printf("Append Entry Input: %v\n", input)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		trial := 1

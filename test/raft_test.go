@@ -3,8 +3,9 @@ package SurfTest
 import (
 	context "context"
 	"cse224/proj5/pkg/surfstore"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	"testing"
+
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestRaftSetLeader(t *testing.T) {

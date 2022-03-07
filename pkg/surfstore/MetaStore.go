@@ -20,6 +20,8 @@ func (m *MetaStore) GetFileInfoMap(ctx context.Context, _ *emptypb.Empty) (*File
 	metaLock.Lock()
 	defer metaLock.Unlock()
 
+	// log.Printf("Get file info map called: %v", m.FileMetaMap)
+
 	res := &FileInfoMap{
 		FileInfoMap: m.FileMetaMap,
 	}
