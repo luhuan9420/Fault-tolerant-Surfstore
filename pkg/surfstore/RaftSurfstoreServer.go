@@ -401,6 +401,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	fmt.Printf("Server %v start sends heartbeat...\n", s.serverId)
 	fmt.Printf("Server %v log: %v\n", s.serverId, s.log)
+	fmt.Printf("Next index: %v\n", s.nextIndex)
 	if s.isCrashed {
 		return &Success{Flag: false}, ERR_SERVER_CRASHED
 	}
@@ -432,7 +433,7 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 			Term:         s.term,
 			PrevLogIndex: prevLogIndex,
 			PrevLogTerm:  int64(prevLogTerm),
-			Entries:      make([]*UpdateOperation, 0),
+			Entries:      s.log[s.nextIndex[i]:],
 			LeaderCommit: s.commitIndex,
 		}
 		// log.Printf("Append Entry Input: %v\n", input)
