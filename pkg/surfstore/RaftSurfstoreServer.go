@@ -184,6 +184,13 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	}
 	fmt.Printf("[Server %v]: is leader\n", s.serverId)
 
+	// check if majority of servers alive
+	if s.CheckMajority(ctx, &emptypb.Empty{}) == false {
+		fmt.Println("Majority of followers are down...\t Wait for recovery")
+		s.WaitMajorityRecover()
+	}
+	fmt.Println("Majroity of floowers respond...")
+
 	op := UpdateOperation{
 		Term:         s.term,
 		FileMetaData: filemeta,
@@ -198,14 +205,6 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	fmt.Printf("Index for pending commits: %v\n", idx)
 	go s.attemptCommit(idx)
 	fmt.Printf("[Server %v]: Pending commit: %v\n", s.serverId, s.pendingCommits)
-
-	// check if majority of servers alive
-	if s.CheckMajority(ctx, &emptypb.Empty{}) == false {
-		fmt.Println("Majority of followers are down...\t Wait for recovery")
-		s.WaitMajorityRecover()
-	}
-	fmt.Println("Majroity of floowers respond...")
-
 	success := <-committed
 	if success {
 		fmt.Printf("[Server %v]: Commit return true, leader update file\n", s.serverId)
@@ -354,7 +353,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	}
 	//2. Reply false if log doesn’t contain an entry at prevLogIndex whose term
 	//matches prevLogTerm (§5.3)
-	if int(input.PrevLogIndex) > len(s.log) {
+	if int(input.PrevLogIndex) > len(s.log)-1 {
 		fmt.Printf("[Server %v]: Prev log index mismatch: leader's PrevLogIndex: %v, follower's log length: %v\n", s.serverId, input.PrevLogIndex, len(s.log))
 		return output, ERR_PREVLOGTERM_MISMATCH
 	}
