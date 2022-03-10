@@ -215,7 +215,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 func (s *RaftSurfstore) attemptCommit() {
 	fmt.Printf("[Server %v]: attempt commit...\n", s.serverId)
 	targetIdx := s.commitIndex + 1
-	fmt.Printf("Server %v]: target index: %v\n", s.serverId, targetIdx)
+	fmt.Printf("[Server %v]: target index: %v\n", s.serverId, targetIdx)
 	commitChan := make(chan *AppendEntryOutput, len(s.ipList))
 	for i, _ := range s.ipList {
 		if i == int(s.serverId) {
@@ -277,6 +277,7 @@ func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *
 			fmt.Printf("[Server %v]: calls AppendEntries: trial %v\n", serverIdx, trial)
 			trial++
 			output, err := client.AppendEntries(ctx, input)
+			fmt.Printf("[Server %v]: Append Entries Output: %v\n", serverIdx, output)
 			if err != nil {
 				if strings.Contains(err.Error(), ERR_WRONG_TERM.Error()) {
 					s.isLeader = false
@@ -293,6 +294,9 @@ func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *
 						input.PrevLogTerm = -1
 					}
 					fmt.Printf("[Server %v]: Append Entry Input (Update): %v\n", serverIdx, input)
+				}
+				if strings.Contains(err.Error(), ERR_SERVER_CRASHED.Error()) {
+					continue
 				}
 			}
 			if output.Success {
@@ -478,6 +482,7 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 			fmt.Printf("[Server %v]: calls AppendEntries: trial %v\n", i, trial)
 			trial++
 			output, err := client.AppendEntries(ctx, input)
+			fmt.Printf("[Server %v]: Append Entries Output: %v\n", i, output)
 			if err != nil {
 				if strings.Contains(err.Error(), ERR_WRONG_TERM.Error()) {
 					s.isLeader = false

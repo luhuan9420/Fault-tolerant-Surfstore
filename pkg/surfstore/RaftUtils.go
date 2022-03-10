@@ -54,6 +54,12 @@ func NewRaftServer(id int64, ips []string, blockStoreAddr string) (*RaftSurfstor
 	// TODO any initialization you need to do here
 
 	isCrashedMutex := &sync.RWMutex{}
+	next := make([]int64, len(ips))
+	match := make([]int64, len(ips))
+	for i, _ := range ips {
+		next[i] = 0
+		match[i] = -1
+	}
 
 	server := RaftSurfstore{
 		// TODO initialize any fields you add here
@@ -64,8 +70,8 @@ func NewRaftServer(id int64, ips []string, blockStoreAddr string) (*RaftSurfstor
 		lastApplied: -1,
 		commitIndex: -1,
 
-		nextIndex:  make([]int64, len(ips)),
-		matchIndex: make([]int64, len(ips)),
+		nextIndex:  next,
+		matchIndex: match,
 
 		isLeader:       false,
 		term:           0,
