@@ -221,6 +221,17 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 }
 
 func (s *RaftSurfstore) attemptCommit(idx int, entryIdx int) {
+	if s.isCrashed {
+		fmt.Printf("[Server %v]: is crash\n", s.serverId)
+		return
+	}
+
+	if s.isLeader == false {
+		fmt.Printf("[Server %v]: is not a leader\n", s.serverId)
+		return
+	}
+	fmt.Printf("[Server %v]: is leader\n", s.serverId)
+
 	fmt.Printf("[Server %v]: attempt commit %v...\n", s.serverId, s.log[entryIdx].FileMetaData.Filename)
 	// targetIdx := s.commitIndex + 1
 	fmt.Printf("[Server %v]: target index: %v\n", s.serverId, entryIdx)
