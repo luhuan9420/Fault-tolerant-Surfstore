@@ -128,11 +128,6 @@ func (s *RaftSurfstore) CheckMajority(ctx context.Context, empty *emptypb.Empty)
 }
 
 func (s *RaftSurfstore) WaitMajorityRecover() error {
-	// check if leader crash
-	if s.isCrashed {
-		fmt.Printf("[Server %v]: is crashed\n", s.serverId)
-		return ERR_SERVER_CRASHED
-	}
 
 	commitChan := make(chan bool, len(s.ipList))
 	for i, _ := range s.ipList {
@@ -143,6 +138,11 @@ func (s *RaftSurfstore) WaitMajorityRecover() error {
 	}
 	commitCount := 1
 	for {
+		// check if leader crash
+		if s.isCrashed {
+			fmt.Printf("[Server %v]: is crashed\n", s.serverId)
+			return ERR_SERVER_CRASHED
+		}
 		fmt.Printf("[Server %v]: wait for follower nodes recover: %v\n", s.serverId, commitChan)
 		commit := <-commitChan
 		if commit == true {
@@ -207,6 +207,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		fmt.Println("Majority of followers are down...\t Wait for recovery")
 		err := s.WaitMajorityRecover()
 		if strings.Contains(err.Error(), ERR_SERVER_CRASHED.Error()) {
+			fmt.Printf("[Server %v]: is leader? %v crash\n", s.serverId, s.isLeader)
 			return nil, ERR_SERVER_CRASHED
 		}
 	}
