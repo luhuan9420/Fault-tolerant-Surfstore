@@ -200,8 +200,9 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	fmt.Printf("[Server %v]: Log (before committed): %v\n", s.serverId, s.log)
 	committed := make(chan bool)
 	s.pendingCommits = append(s.pendingCommits, committed)
-
-	go s.attemptCommit()
+	idx := len(s.pendingCommits)
+	fmt.Printf("Index for pending commits: %v\n", idx)
+	go s.attemptCommit(idx)
 	fmt.Printf("[Server %v]: Pending commit: %v\n", s.serverId, s.pendingCommits)
 	success := <-committed
 	if success {
@@ -212,7 +213,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	return nil, nil
 }
 
-func (s *RaftSurfstore) attemptCommit() {
+func (s *RaftSurfstore) attemptCommit(idx int) {
 	fmt.Printf("[Server %v]: attempt commit...\n", s.serverId)
 	targetIdx := s.commitIndex + 1
 	fmt.Printf("[Server %v]: target index: %v\n", s.serverId, targetIdx)
@@ -233,7 +234,8 @@ func (s *RaftSurfstore) attemptCommit() {
 		}
 		if commitCount > len(s.ipList)/2 {
 			fmt.Printf("%v followers committed (majority), pending to commit\n", commitCount)
-			s.pendingCommits[targetIdx] <- true
+			fmt.Printf("[Server %v]: Pending commit: %v\n", s.serverId, s.pendingCommits)
+			s.pendingCommits[idx] <- true
 			s.commitIndex = targetIdx
 			break
 		}
@@ -423,6 +425,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 		s.nextIndex[i] = int64(len(s.log))
 	}
 	s.matchIndex[s.serverId] = int64(len(s.log) - 1)
+	fmt.Printf("[Server %v]: pending commit: %v\n", s.serverId, s.pendingCommits)
 	fmt.Printf("Next Index: %v\n", s.nextIndex)
 	fmt.Printf("Match Index: %v\n", s.matchIndex)
 
