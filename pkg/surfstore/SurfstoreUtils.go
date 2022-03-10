@@ -342,7 +342,7 @@ func uploadNew(client RPCClient, fmd *FileMetaData, localFileInfoMap *map[string
 }
 
 func download(client RPCClient, filename string, serverMD *FileMetaData) (*FileMetaData, error) {
-	log.Println("Start downloading...")
+	fmt.Println("Start downloading...")
 	filePath := client.BaseDir + "/" + filename
 
 	var file *os.File
@@ -401,6 +401,6 @@ func download(client RPCClient, filename string, serverMD *FileMetaData) (*FileM
 		Version:       serverMD.GetVersion(),
 		BlockHashList: serverMD.GetBlockHashList(),
 	}
-	log.Println("Finish downloading...")
+	fmt.Println("Finish downloading...")
 	return fmd, err
 }

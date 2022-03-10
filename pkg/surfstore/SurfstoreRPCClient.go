@@ -2,6 +2,7 @@ package surfstore
 
 import (
 	context "context"
+	"fmt"
 	"log"
 	"time"
 
@@ -104,14 +105,14 @@ func (surfClient *RPCClient) GetLeaderIndex() int {
 			highestTerm = int(internalState.Term)
 		}
 	}
-	log.Printf("Leader index: %v\n", leaderIdx)
-	log.Printf("Leader term: %v\n", highestTerm)
+	fmt.Printf("Leader index: %v\n", leaderIdx)
+	fmt.Printf("Leader term: %v\n", highestTerm)
 	return leaderIdx
 }
 
 func (surfClient *RPCClient) GetFileInfoMap(serverFileInfoMap *map[string]*FileMetaData) error {
 	leaderIdx := surfClient.GetLeaderIndex()
-	log.Printf("leaderIdx: %v call get file info map\n", leaderIdx)
+	fmt.Printf("[leaderIdx: %v]: call get file info map\n", leaderIdx)
 	conn, err := grpc.Dial(surfClient.MetaStoreAddrs[leaderIdx], grpc.WithInsecure())
 	if err != nil {
 		return err
@@ -121,8 +122,8 @@ func (surfClient *RPCClient) GetFileInfoMap(serverFileInfoMap *map[string]*FileM
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	// crash, _ := ms.IsCrashed(ctx, &emptypb.Empty{})
-	// log.Printf("Is leader crash? %v\n", crash.IsCrashed)
+	crash, _ := ms.IsCrashed(ctx, &emptypb.Empty{})
+	log.Printf("Is leader crash? %v\n", crash.IsCrashed)
 	fileInfoMap, err := ms.GetFileInfoMap(ctx, &emptypb.Empty{})
 	if err != nil {
 		conn.Close()
@@ -141,7 +142,7 @@ func (surfClient *RPCClient) GetFileInfoMap(serverFileInfoMap *map[string]*FileM
 func (surfClient *RPCClient) UpdateFile(fileMetaData *FileMetaData, latestVersion *int32) error {
 	// log.Printf("client update file...\n")
 	leaderIdx := surfClient.GetLeaderIndex()
-	log.Printf("leaderIdx: %v call update file\n", leaderIdx)
+	fmt.Printf("[leaderIdx: %v]: call update file\n", leaderIdx)
 
 	conn, err := grpc.Dial(surfClient.MetaStoreAddrs[leaderIdx], grpc.WithInsecure())
 	if err != nil {

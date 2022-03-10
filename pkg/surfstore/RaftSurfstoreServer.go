@@ -3,7 +3,6 @@ package surfstore
 import (
 	context "context"
 	"fmt"
-	"log"
 	"math"
 	"strings"
 	"sync"
@@ -52,13 +51,15 @@ type RaftSurfstore struct {
 // }
 
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
-	fmt.Println("Raft GetFileInfoMap...")
+	fmt.Printf("[Server %v]: Raft GetFileInfoMap...\n", s.serverId)
 
 	if s.isCrashed {
+		fmt.Printf("[Server %v]: is crashed\n", s.serverId)
 		return nil, ERR_SERVER_CRASHED
 	}
 
 	if s.isLeader == false {
+		fmt.Printf("[Server %v]: is not a leader\n", s.serverId)
 		return nil, ERR_NOT_LEADER
 	}
 
@@ -70,18 +71,21 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 	// 	}
 	// }
 	if s.CheckMajority(ctx, empty) == false {
+		fmt.Printf("[Server %v]: Majority of followers crash\n", s.serverId)
 		return nil, ERR_MAJORITY_CRASHED
 	}
 	return &FileInfoMap{FileInfoMap: s.metaStore.FileMetaMap}, nil
 }
 
 func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Empty) (*BlockStoreAddr, error) {
-	fmt.Println("Raft GetBlockStoreAddr")
+	fmt.Printf("[Server %v]: Raft GetBlockStoreAddr...\n", s.serverId)
 	if s.isCrashed {
+		fmt.Printf("[Server %v]: is crashed\n", s.serverId)
 		return nil, ERR_SERVER_CRASHED
 	}
 
 	if s.isLeader == false {
+		fmt.Printf("[Server %v]: is not a leader\n", s.serverId)
 		return nil, ERR_NOT_LEADER
 	}
 
@@ -91,6 +95,7 @@ func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Em
 	// 	}
 	// }
 	if s.CheckMajority(ctx, empty) == false {
+		fmt.Printf("[Server %v]: Majority of followers crash\n", s.serverId)
 		return nil, ERR_MAJORITY_CRASHED
 	}
 	return &BlockStoreAddr{Addr: s.metaStore.BlockStoreAddr}, nil
@@ -112,6 +117,8 @@ func (s *RaftSurfstore) CheckMajority(ctx context.Context, empty *emptypb.Empty)
 		clientCrashed, _ := client.IsCrashed(ctx, empty)
 		if clientCrashed.IsCrashed == false {
 			alive++
+		} else {
+			fmt.Printf("[Server %v]: is crash\n", i)
 		}
 		if alive > len(s.ipList)/2 {
 			return true
@@ -128,9 +135,9 @@ func (s *RaftSurfstore) WaitMajorityRecover() {
 		}
 		go s.CheckRecovery(int64(i), commitChan)
 	}
-
 	commitCount := 1
 	for {
+		fmt.Printf("[Server %v]: wait for follower nodes recover: %v\n", s.serverId, commitChan)
 		commit := <-commitChan
 		if commit == true {
 			commitCount++
@@ -153,6 +160,7 @@ func (s *RaftSurfstore) CheckRecovery(serverIdx int64, commitChan chan bool) {
 		defer cancel()
 		clientCrashed, _ := client.IsCrashed(ctx, &emptypb.Empty{})
 		if clientCrashed.IsCrashed == false && clientCrashed != nil {
+			fmt.Printf("[Server %v]: is restored\n", serverIdx)
 			commitChan <- true
 			return
 		}
@@ -164,20 +172,24 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	// if leader & majority nodes working, return correct answer (call updateFile function)
 	// if majority node crashed, block until majority recover
 	// if not leader, return error back to client
-	fmt.Printf("Server %v call raft update file...\n", s.serverId)
+	fmt.Printf("[Server %v]: Raft update file...\n", s.serverId)
 	if s.isCrashed {
+		fmt.Printf("[Server %v]: is crash\n", s.serverId)
 		return nil, ERR_SERVER_CRASHED
 	}
 
 	if s.isLeader == false {
+		fmt.Printf("[Server %v]: is not a leader\n", s.serverId)
 		return nil, ERR_NOT_LEADER
 	}
-	fmt.Printf("Server %v is leader\n", s.serverId)
+	fmt.Printf("[Server %v]: is leader\n", s.serverId)
 
 	// check if majority of servers alive
 	if s.CheckMajority(ctx, &emptypb.Empty{}) == false {
+		fmt.Println("Majority of followers are down...\t Wait for recovery")
 		s.WaitMajorityRecover()
 	}
+	fmt.Println("Majroity of floowers respond...")
 
 	op := UpdateOperation{
 		Term:         s.term,
@@ -185,14 +197,15 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	}
 
 	s.log = append(s.log, &op)
+	fmt.Printf("[Server %v]: Log (before committed): %v\n", s.serverId, s.log)
 	committed := make(chan bool)
 	s.pendingCommits = append(s.pendingCommits, committed)
 
 	go s.attemptCommit()
-	fmt.Printf("Pending commit: %v\n", s.pendingCommits)
+	fmt.Printf("[Server %v]: Pending commit: %v\n", s.serverId, s.pendingCommits)
 	success := <-committed
 	if success {
-		fmt.Println("Commit return true, leader update file")
+		fmt.Printf("[Server %v]: Commit return true, leader update file\n", s.serverId)
 		return s.metaStore.UpdateFile(ctx, filemeta)
 	}
 
@@ -200,8 +213,9 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 }
 
 func (s *RaftSurfstore) attemptCommit() {
-	log.Printf("Server %v call attempt commit...\n", s.serverId)
+	fmt.Printf("[Server %v]: attempt commit...\n", s.serverId)
 	targetIdx := s.commitIndex + 1
+	fmt.Printf("Server %v]: target index: %v\n", s.serverId, targetIdx)
 	commitChan := make(chan *AppendEntryOutput, len(s.ipList))
 	for i, _ := range s.ipList {
 		if i == int(s.serverId) {
@@ -212,12 +226,13 @@ func (s *RaftSurfstore) attemptCommit() {
 
 	commitCount := 1
 	for {
+		fmt.Printf("[Server %v]: followers commit result (AppendEntryOutput): %v\n", s.serverId, commitChan)
 		commit := <-commitChan
 		if commit != nil && commit.Success {
 			commitCount++
 		}
 		if commitCount > len(s.ipList)/2 {
-			fmt.Printf("Majority %v committed, pending to commit\n", commitCount)
+			fmt.Printf("%v followers committed (majority), pending to commit\n", commitCount)
 			s.pendingCommits[targetIdx] <- true
 			s.commitIndex = targetIdx
 			break
@@ -226,8 +241,8 @@ func (s *RaftSurfstore) attemptCommit() {
 }
 
 func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *AppendEntryOutput) {
-	log.Printf("Server %v call commit entry...\n", serverIdx)
-	fmt.Printf("Server %v try to commit entry...\n log: %v\n", serverIdx, s.log[entryIdx])
+	// log.Printf("Server %v call commit entry...\n", serverIdx)
+	fmt.Printf("[Server %v]: try to commit entry...\n commit item: %v\n", serverIdx, s.log[entryIdx])
 	// trial := 1
 	for {
 		addr := s.ipList[serverIdx]
@@ -237,9 +252,9 @@ func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *
 		}
 		defer conn.Close()
 		client := NewRaftSurfstoreClient(conn)
-		log.Printf("Server %v connects successfully", serverIdx)
+		fmt.Printf("[Server %v]: connects successfully\n", serverIdx)
 		prevLogIndex := s.nextIndex[serverIdx] - 1
-		log.Printf("Prev log index: %v\n", prevLogIndex)
+		fmt.Printf("[Server %v]: Prev log index: %v\n", serverIdx, prevLogIndex)
 		prevLogTerm := -1
 		if prevLogIndex >= 0 {
 			prevLogTerm = int(s.log[prevLogIndex].Term)
@@ -253,18 +268,19 @@ func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *
 			LeaderCommit: s.commitIndex + 1,
 		}
 
-		log.Printf("Append Entry Input: %v\n", input)
+		fmt.Printf("[Server %v]: Append Entry Input: %v\n", serverIdx, input)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
 		trial := 1
 		for {
-			fmt.Printf("Server %v calls AppendEntries: trial %v", serverIdx, trial)
+			fmt.Printf("[Server %v]: calls AppendEntries: trial %v\n", serverIdx, trial)
 			trial++
 			output, err := client.AppendEntries(ctx, input)
 			if err != nil {
 				if strings.Contains(err.Error(), ERR_WRONG_TERM.Error()) {
 					s.isLeader = false
+					fmt.Printf("[Server %v]: Not newest leader, terminate\n", s.serverId)
 					return
 				}
 				if strings.Contains(err.Error(), ERR_PREVLOGTERM_MISMATCH.Error()) {
@@ -276,13 +292,15 @@ func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *
 					} else {
 						input.PrevLogTerm = -1
 					}
+					fmt.Printf("[Server %v]: Append Entry Input (Update): %v\n", serverIdx, input)
 				}
 			}
 			if output.Success {
-				fmt.Printf("Server %v Append entry success\n", serverIdx)
+				fmt.Printf("[Server %v]: Append entry success\n", serverIdx)
 				commitChan <- output
 				return
 			} else if s.isCrashed {
+				fmt.Printf("[Server %v]: is crash\n", s.serverId)
 				continue
 			}
 		}
@@ -299,19 +317,20 @@ func (s *RaftSurfstore) commitEntry(serverIdx, entryIdx int64, commitChan chan *
 //5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
 //of last new entry)
 func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInput) (*AppendEntryOutput, error) {
-	log.Printf("Append entries function...\n")
+	// log.Printf("Append entries function...\n")
 	output := &AppendEntryOutput{
 		Success:      false,
 		MatchedIndex: -1,
 	}
 	// log.Printf("Initial output: %v\n", output)
 	if s.isCrashed {
-		log.Printf("Server %v is crashed\n", s.serverId)
+		fmt.Printf("[Server %v]: is crash\n", s.serverId)
 		return output, ERR_SERVER_CRASHED
 	}
-	log.Printf("follower %v term: %v", s.serverId, s.term)
+	// log.Printf("follower %v term: %v", s.serverId, s.term)
 	//1. Reply false if term < currentTerm (§5.1)
 	if input.Term < s.term {
+		fmt.Printf("[Server %v]: Wrong term, follower has higher term: Follower term: %v, Leader term: %v\n", s.serverId, s.term, input.Term)
 		input.Term = s.term
 		output.Term = s.term
 		return output, ERR_WRONG_TERM
@@ -319,6 +338,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	if input.Term > s.term {
 		//there is a new leader
+		fmt.Printf("[Server %v]: Update follower's term: Follower term %v, Leader term: %v\n", s.serverId, s.term, input.Term)
 		if s.isLeader {
 			s.isLeader = false
 		}
@@ -327,10 +347,12 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	//2. Reply false if log doesn’t contain an entry at prevLogIndex whose term
 	//matches prevLogTerm (§5.3)
 	if int(input.PrevLogIndex) > len(s.log) {
+		fmt.Printf("[Server %v]: Prev log index mismatch: leader's PrevLogIndex: %v, follower's log length: %v\n", s.serverId, input.PrevLogIndex, len(s.log))
 		return output, ERR_PREVLOGTERM_MISMATCH
 	}
 
 	if input.PrevLogIndex >= 0 && s.log[input.PrevLogIndex].Term != input.PrevLogTerm {
+		fmt.Printf("[Server %v]: Prev log term mismatch: leader's PrevLogTerm: %v, follower's log PrevLogIndex term: %v\n", s.serverId, input.PrevLogTerm, s.log[input.PrevLogIndex].Term)
 		return output, ERR_PREVLOGTERM_MISMATCH
 	}
 
@@ -347,16 +369,18 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	//4. Append any new entries not already in the log
 	s.log = append(s.log, input.Entries...)
-	log.Printf("Commit index: %v\n", s.commitIndex)
-	log.Printf("Leader commit: %v\n", input.LeaderCommit)
+	fmt.Printf("[Server %v]: append entries log: %v\n", s.serverId, s.log)
+
+	// log.Printf("Commit index: %v\n", s.commitIndex)
+	// log.Printf("Leader commit: %v\n", input.LeaderCommit)
 
 	//5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
 	//of last new entry)
 	if input.LeaderCommit > s.commitIndex {
 		s.commitIndex = int64(math.Min(float64(input.LeaderCommit), float64(len(s.log)-1)))
 	}
-	log.Printf("Last Applied: %v\n", s.lastApplied)
-	log.Printf("Commit index: %v\n", s.commitIndex)
+	fmt.Printf("[Server %v]: Last Applied: %v\n", s.serverId, s.lastApplied)
+	fmt.Printf("[Server %v]: Commit index: %v\n", s.serverId, s.commitIndex)
 	for s.lastApplied < s.commitIndex {
 		s.lastApplied++
 		entry := s.log[s.lastApplied]
@@ -365,13 +389,15 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	s.nextIndex[s.serverId] = int64(len(s.log))
 	s.matchIndex[s.serverId] = int64(len(s.log) - 1)
+	fmt.Printf("[Server %v]: next index: %v\n", s.serverId, s.nextIndex[s.serverId])
+	fmt.Printf("[Server %v]: match index: %v\n", s.serverId, s.matchIndex[s.serverId])
 
 	output.Success = true
 	output.Term = input.Term
 	output.ServerId = s.serverId
 	output.MatchedIndex = s.matchIndex[s.serverId]
 
-	fmt.Printf("Server %v append entries\nlog: %v\n", s.serverId, s.log)
+	// fmt.Printf("Server %v append entries\nlog: %v\n", s.serverId, s.log)
 	// fmt.Printf("Server %v output: %v\n", s.serverId, output)
 	return output, nil
 }
@@ -380,18 +406,21 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	// check crash
 	if s.isCrashed {
+		fmt.Printf("[Server %v]: is crash\n", s.serverId)
 		return nil, ERR_SERVER_CRASHED
 	}
-	fmt.Printf("Server %v sets to be a leader...\n", s.serverId)
 	// need lock ?
 	s.isLeader = true
 	s.term = s.term + 1
+	fmt.Printf("[Server %v]: is leader now. Term: %v\n", s.serverId, s.term)
 	// update next match
 	// log.Printf("Number of servers: %v \n", len(s.ipList))
 	for i, _ := range s.ipList {
 		s.nextIndex[i] = int64(len(s.log))
 	}
 	s.matchIndex[s.serverId] = int64(len(s.log) - 1)
+	fmt.Printf("Next Index: %v\n", s.nextIndex)
+	fmt.Printf("Match Index: %v\n", s.matchIndex)
 
 	return &Success{Flag: true}, nil
 }
@@ -399,14 +428,16 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 // Send a 'Heartbeat" (AppendEntries with no log entries) to the other servers
 // Only leaders send heartbeats, if the node is not the leader you can return Success = false
 func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
-	fmt.Printf("Server %v start sends heartbeat...\n", s.serverId)
-	fmt.Printf("Server %v log: %v\n", s.serverId, s.log)
-	fmt.Printf("Next index: %v\n", s.nextIndex)
+	fmt.Printf("[Server %v]: start sends heartbeat...\n", s.serverId)
+	fmt.Printf("[Server %v]: log before: %v\n", s.serverId, s.log)
+	// fmt.Printf("Next index: %v\n", s.nextIndex)
 	if s.isCrashed {
+		fmt.Printf("[Server %v]: is crash\n", s.serverId)
 		return &Success{Flag: false}, ERR_SERVER_CRASHED
 	}
 
 	if s.isLeader == false {
+		fmt.Printf("[Server %v]: is not a leader\n", s.serverId)
 		return &Success{Flag: false}, ERR_NOT_LEADER
 	}
 
@@ -420,9 +451,11 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		}
 		client := NewRaftSurfstoreClient(conn)
 		// log.Printf("Server %v connects successfully", i)
+		fmt.Printf("[Server %v]: connects successfully\n", i)
 
 		prevLogIndex := s.nextIndex[i] - 1
 		// log.Printf("Prev log index: %v\n", prevLogIndex)
+		fmt.Printf("[Server %v]: Prev log index: %v\n", i, prevLogIndex)
 		prevLogTerm := -1
 		if prevLogIndex >= 0 {
 			prevLogTerm = int(s.log[prevLogIndex].Term)
@@ -437,16 +470,18 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 			LeaderCommit: s.commitIndex,
 		}
 		// log.Printf("Append Entry Input: %v\n", input)
+		fmt.Printf("[Server %v]: Append Entry Input: %v\n", i, input)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		trial := 1
 		for {
-			log.Printf("Server %v calls AppendEntries: trial %v", i, trial)
+			fmt.Printf("[Server %v]: calls AppendEntries: trial %v\n", i, trial)
 			trial++
 			output, err := client.AppendEntries(ctx, input)
 			if err != nil {
 				if strings.Contains(err.Error(), ERR_WRONG_TERM.Error()) {
 					s.isLeader = false
+					fmt.Printf("[Server %v]: Not newest leader, terminate\n", s.serverId)
 					return &Success{Flag: false}, ERR_NOT_LEADER
 				}
 				if strings.Contains(err.Error(), ERR_PREVLOGTERM_MISMATCH.Error()) {
@@ -458,19 +493,21 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 					} else {
 						input.PrevLogTerm = -1
 					}
+					fmt.Printf("[Server %v]: Append Entry Input (Update): %v\n", i, input)
 				}
 				if strings.Contains(err.Error(), ERR_SERVER_CRASHED.Error()) {
-					log.Printf("Server %v crash\n", i)
 					break
 				}
 			}
 			if output.Success {
-				log.Printf("Server %v Append entry success\n", i)
+				fmt.Printf("[Server %v]: Append entry success\n", i)
 				break
+			} else if s.isCrashed {
+				fmt.Printf("[Server %v]: is crash\n", s.serverId)
 			}
 		}
 		internal, _ := client.GetInternalState(ctx, &emptypb.Empty{})
-		fmt.Printf("Server %v log: %v\n", i, internal.Log)
+		fmt.Printf("[Server %v]: log after: %v\n", i, internal.Log)
 
 	}
 
@@ -481,6 +518,7 @@ func (s *RaftSurfstore) Crash(ctx context.Context, _ *emptypb.Empty) (*Success, 
 	s.isCrashedMutex.Lock()
 	s.isCrashed = true
 	s.isCrashedMutex.Unlock()
+	fmt.Printf("[Server %v]: is crashed\n", s.serverId)
 
 	return &Success{Flag: true}, nil
 }
@@ -490,6 +528,7 @@ func (s *RaftSurfstore) Restore(ctx context.Context, _ *emptypb.Empty) (*Success
 	s.isCrashed = false
 	s.notCrashedCond.Broadcast()
 	s.isCrashedMutex.Unlock()
+	fmt.Printf("[Server %v]: is restored\n", s.serverId)
 
 	return &Success{Flag: true}, nil
 }
