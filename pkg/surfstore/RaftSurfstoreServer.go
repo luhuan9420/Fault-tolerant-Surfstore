@@ -192,6 +192,9 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	s.log = append(s.log, &op)
 	fmt.Printf("[Server %v]: Log (before committed): %v\n", s.serverId, s.log)
 
+	lastLogIndex := len(s.log) - 1
+	fmt.Printf("Last log index (which file is committed): %v\n", lastLogIndex)
+
 	// check if majority of servers alive
 	if s.CheckMajority(ctx, &emptypb.Empty{}) == false {
 		fmt.Println("Majority of followers are down...\t Wait for recovery")
@@ -204,9 +207,6 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 
 	idx := len(s.pendingCommits) - 1
 	fmt.Printf("Index for pending commits: %v\n", idx)
-
-	lastLogIndex := len(s.log) - 1
-	fmt.Printf("Last log index (which file is committed): %v\n", lastLogIndex)
 
 	go s.attemptCommit(idx, lastLogIndex)
 	fmt.Printf("[Server %v]: Pending commit: %v\n", s.serverId, s.pendingCommits)
