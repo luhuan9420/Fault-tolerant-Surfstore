@@ -127,7 +127,13 @@ func (s *RaftSurfstore) CheckMajority(ctx context.Context, empty *emptypb.Empty)
 	return false
 }
 
-func (s *RaftSurfstore) WaitMajorityRecover() {
+func (s *RaftSurfstore) WaitMajorityRecover() error {
+	// check if leader crash
+	if s.isCrashed {
+		fmt.Printf("[Server %v]: is crashed\n", s.serverId)
+		return ERR_SERVER_CRASHED
+	}
+
 	commitChan := make(chan bool, len(s.ipList))
 	for i, _ := range s.ipList {
 		if i == int(s.serverId) {
@@ -146,6 +152,7 @@ func (s *RaftSurfstore) WaitMajorityRecover() {
 			break
 		}
 	}
+	return nil
 }
 
 func (s *RaftSurfstore) CheckRecovery(serverIdx int64, commitChan chan bool) {
@@ -198,7 +205,10 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	// check if majority of servers alive
 	if s.CheckMajority(ctx, &emptypb.Empty{}) == false {
 		fmt.Println("Majority of followers are down...\t Wait for recovery")
-		s.WaitMajorityRecover()
+		err := s.WaitMajorityRecover()
+		if strings.Contains(err.Error(), ERR_SERVER_CRASHED.Error()) {
+			return nil, ERR_SERVER_CRASHED
+		}
 	}
 	fmt.Println("Majroity of floowers respond...")
 
@@ -221,16 +231,6 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 }
 
 func (s *RaftSurfstore) attemptCommit(idx int, entryIdx int) {
-	if s.isCrashed {
-		fmt.Printf("[Server %v]: is crash\n", s.serverId)
-		return
-	}
-
-	if s.isLeader == false {
-		fmt.Printf("[Server %v]: is not a leader\n", s.serverId)
-		return
-	}
-	fmt.Printf("[Server %v]: is leader\n", s.serverId)
 
 	fmt.Printf("[Server %v]: attempt commit %v...\n", s.serverId, s.log[entryIdx].FileMetaData.Filename)
 	// targetIdx := s.commitIndex + 1
