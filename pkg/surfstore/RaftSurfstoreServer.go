@@ -184,13 +184,6 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	}
 	fmt.Printf("[Server %v]: is leader\n", s.serverId)
 
-	// check if majority of servers alive
-	if s.CheckMajority(ctx, &emptypb.Empty{}) == false {
-		fmt.Println("Majority of followers are down...\t Wait for recovery")
-		s.WaitMajorityRecover()
-	}
-	fmt.Println("Majroity of floowers respond...")
-
 	op := UpdateOperation{
 		Term:         s.term,
 		FileMetaData: filemeta,
@@ -200,10 +193,19 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	fmt.Printf("[Server %v]: Log (before committed): %v\n", s.serverId, s.log)
 	committed := make(chan bool)
 	s.pendingCommits = append(s.pendingCommits, committed)
+
 	idx := len(s.pendingCommits) - 1
 	fmt.Printf("Index for pending commits: %v\n", idx)
 	go s.attemptCommit(idx)
 	fmt.Printf("[Server %v]: Pending commit: %v\n", s.serverId, s.pendingCommits)
+
+	// check if majority of servers alive
+	if s.CheckMajority(ctx, &emptypb.Empty{}) == false {
+		fmt.Println("Majority of followers are down...\t Wait for recovery")
+		s.WaitMajorityRecover()
+	}
+	fmt.Println("Majroity of floowers respond...")
+
 	success := <-committed
 	if success {
 		fmt.Printf("[Server %v]: Commit return true, leader update file\n", s.serverId)
