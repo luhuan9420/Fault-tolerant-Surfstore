@@ -200,7 +200,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	fmt.Printf("[Server %v]: Log (before committed): %v\n", s.serverId, s.log)
 	committed := make(chan bool)
 	s.pendingCommits = append(s.pendingCommits, committed)
-	idx := len(s.pendingCommits)
+	idx := len(s.pendingCommits) - 1
 	fmt.Printf("Index for pending commits: %v\n", idx)
 	go s.attemptCommit(idx)
 	fmt.Printf("[Server %v]: Pending commit: %v\n", s.serverId, s.pendingCommits)
