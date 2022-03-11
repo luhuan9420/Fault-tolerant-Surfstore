@@ -127,8 +127,12 @@ func (s *RaftSurfstore) CheckMajority(ctx context.Context, empty *emptypb.Empty)
 	return false
 }
 
-func (s *RaftSurfstore) WaitMajorityRecover() {
+func (s *RaftSurfstore) WaitMajorityRecover() error {
 	// check if leader crash
+	if s.isCrashed {
+		fmt.Printf("[Server %v]: is crashed - check in WaitMajorityRecover\n", s.serverId)
+		return ERR_SERVER_CRASHED
+	}
 	commitChan := make(chan bool, len(s.ipList))
 	for i, _ := range s.ipList {
 		if i == int(s.serverId) {
@@ -142,14 +146,24 @@ func (s *RaftSurfstore) WaitMajorityRecover() {
 		commit := <-commitChan
 		if commit == true {
 			commitCount++
+			continue
+		} else {
+			fmt.Printf("[Server %v]: is crash, commitChan return false in WaitMajorityRecover\n", s.serverId)
+			return ERR_SERVER_CRASHED
 		}
 		if commitCount > len(s.ipList)/2 {
 			break
 		}
 	}
+	return nil
 }
 
 func (s *RaftSurfstore) CheckRecovery(serverIdx int64, commitChan chan bool) {
+	if s.isCrashed {
+		fmt.Printf("[Server %v]: is crashed - check in CheckRecovery\n", s.serverId)
+		commitChan <- false
+		return
+	}
 	for {
 		conn, err := grpc.Dial(s.ipList[serverIdx], grpc.WithInsecure())
 		if err != nil {
@@ -164,6 +178,12 @@ func (s *RaftSurfstore) CheckRecovery(serverIdx int64, commitChan chan bool) {
 			fmt.Printf("[Server %v]: is restored - check in CheckRecovery\n", serverIdx)
 			commitChan <- true
 			return
+		} else if s.isCrashed {
+			fmt.Printf("[Server %v]: is crashed - check in CheckRecovery for loop\n", s.serverId)
+			commitChan <- false
+			return
+		} else {
+			continue
 		}
 	}
 }
@@ -199,7 +219,11 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	// check if majority of servers alive
 	if s.CheckMajority(ctx, &emptypb.Empty{}) == false {
 		fmt.Println("Majority of followers are down...\t Wait for recovery")
-		s.WaitMajorityRecover()
+		err := s.WaitMajorityRecover()
+		if err != nil {
+			fmt.Printf("[Server %v]: is crash while wait other followers recover\n", s.serverId)
+			return nil, ERR_SERVER_CRASHED
+		}
 	}
 	fmt.Println("Majroity of floowers respond...")
 
