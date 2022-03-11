@@ -146,7 +146,6 @@ func (s *RaftSurfstore) WaitMajorityRecover() error {
 		commit := <-commitChan
 		if commit == true {
 			commitCount++
-			continue
 		} else {
 			fmt.Printf("[Server %v]: is crash, commitChan return false in WaitMajorityRecover\n", s.serverId)
 			return ERR_SERVER_CRASHED
