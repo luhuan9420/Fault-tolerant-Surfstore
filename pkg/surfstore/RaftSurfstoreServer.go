@@ -142,8 +142,8 @@ func (s *RaftSurfstore) WaitMajorityRecover() error {
 	}
 	commitCount := 1
 	for {
-		fmt.Printf("[Server %v]: wait for follower nodes recover: %v\n", s.serverId, commitChan)
 		commit := <-commitChan
+		fmt.Printf("[Server %v]: wait for follower nodes recover: %v\n", s.serverId, commit)
 		if commit == true {
 			commitCount++
 		} else {
