@@ -1,14 +1,5 @@
 # Surfstore
 
-This is the starter code for Project 4: Surfstore.
-
-Before you get started, make sure you understand the following 2 things about Go. (These will also be covered in class and in discussions)
-1. Interfaces: They are named collections of method signatures. Here are some good resources to understand interfaces in Go:
-    a. https://gobyexample.com/interfaces
-    b. https://jordanorelli.com/post/32665860244/how-to-use-interfaces-in-go
-
-2. gRPC: You should know how to write gRPC servers and clients in Go. The [gRPC official documentation](https://grpc.io/docs/languages/go/basics/) of the *grpc* is a good resource.
-
 ## Protocol buffers
 
 The starter code defines the following protocol buffer message type in `SurfStore.proto`:
@@ -85,14 +76,13 @@ type BlockStoreInterface interface {
 ## Implementation
 ### Server
 `BlockStore.go` provides a skeleton implementation of the `BlockStoreInterface` and `MetaStore.go` provides a skeleton implementation of the `MetaStoreInterface` 
-**You must implement the methods in these 2 files which have `panic("todo")` as their body.**
 
-`cmd/SurfstoreServerExec/main.go` also has a method `startServer` **which you must implement**. Depending on the service type specified, it should register a `MetaStore`, `BlockStore`, or `Both` and start listening for connections from clients.
+`cmd/SurfstoreServerExec/main.go` also has a method `startServer`. Depending on the service type specified, it should register a `MetaStore`, `BlockStore`, or `Both` and start listening for connections from clients.
 
 ### Client
-`SurfstoreRPCClient.go` provides the gRPC client stub for the surfstore gRPC server. **You must implement the methods in this file which have `panic("todo")` as their body.** (Hint: one of them has been implemented for you)
+`SurfstoreRPCClient.go` provides the gRPC client stub for the surfstore gRPC server.  (Hint: one of them has been implemented for you)
 
-`SurfstoreUtils.go` also has the following method which **you need to implement** for the sync logic of clients:
+`SurfstoreUtils.go` also has the following method which for the sync logic of clients:
 ```go
 /*
 Implement the logic for a client syncing with the server here.
@@ -159,6 +149,3 @@ make run-blockstore
 ```shell
 make run-metastore
 ```
-
-## Testing 
-On gradescope, only a subset of test cases will be visible, so we highly encourage you to come up with different scenarios like the one described above. You can then match the outcome of your implementation to the expected output based on the theory provided in the writeup.
